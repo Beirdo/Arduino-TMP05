@@ -4,7 +4,9 @@
 #include <Arduino.h>
 #include <inttypes.h>
 
-typedef uint16_t uint8_8t;
+#ifndef uint8_8t
+#define uint8_8t uint16_t
+#endif
 
 class TMP05 {
 public:
