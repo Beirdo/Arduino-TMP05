@@ -19,7 +19,7 @@ TMP05::TMP05(uint8_t count, uint8_t outpin, uint8_t inpin)
     p_state = -1;
 
     uint8_t blockSize = count * sizeof(uint8_8t);
-    p_lastResults = (uint8_8t *)malloc(blockSize);
+    p_lastResults = new uint8_8t[count];
     memset(p_lastResults, 0xFF, blockSize);
 
     digitalWrite(p_outpin, HIGH);
