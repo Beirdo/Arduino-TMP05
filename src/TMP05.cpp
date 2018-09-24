@@ -89,7 +89,7 @@ void TMP05::handleInterrupt(void)
     }
 }
 
-uint8_t TMP05::getState(void)
+int8_t TMP05::getState(void)
 {
     return p_state;
 }
