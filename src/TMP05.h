@@ -15,11 +15,11 @@ public:
     uint8_8t getReading(uint8_t index);
     int8_t getState(void);
     void handleInterrupt(void);
+    uint8_t getOutpin(void);
 
 protected:
     void enableMyInterrupt(void);
     void disableMyInterrupt(void);
-
 private:
     uint8_t p_count;
     uint8_t p_outpin;

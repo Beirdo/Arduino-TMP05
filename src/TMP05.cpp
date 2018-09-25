@@ -1,6 +1,7 @@
 #include "TMP05.h"
 
 #define LIBCALL_ENABLEINTERRUPT
+#define EI_ARDUINO_INTERRUPTED_PIN
 #include <EnableInterrupt.h>
 
 // Requires:  use of the system timer (in microseconds)
@@ -9,7 +10,8 @@
 
 static void interruptHandler(void);
 
-TMP05 *sensorChain = NULL;
+TMP05 *sensorChain[5] = {0};
+uint8_t sensorMax = -1;
 
 TMP05::TMP05(uint8_t count, uint8_t outpin, uint8_t inpin)
 {
@@ -25,7 +27,15 @@ TMP05::TMP05(uint8_t count, uint8_t outpin, uint8_t inpin)
     digitalWrite(p_outpin, HIGH);
     pinMode(p_outpin, OUTPUT);
     pinMode(p_inpin, INPUT_PULLUP);
-    sensorChain = this;
+    if (sensorMax < 4) {
+        sensorMax++;
+        sensorChain[sensorMax] = this;
+    }
+}
+
+uint8_t TMP05::getOutpin(void)
+{
+    return p_outpin;
 }
 
 void TMP05::enableMyInterrupt(void)
@@ -44,10 +54,15 @@ void TMP05::disableMyInterrupt(void)
 
 static void interruptHandler(void)
 {
-    if (!sensorChain) {
-        return;
+    uint8_t i;
+
+    for (i = 0; i < sensorMax; i++) {
+        TMP05 *sensor = sensorChain[i];
+        if (sensor && sensor->getOutpin() == arduinoInterruptedPin) {
+            sensor->handleInterrupt();
+            return;
+        }
     }
-    sensorChain->handleInterrupt();
 }
 
 void TMP05::handleInterrupt(void)
