@@ -5,32 +5,25 @@
 //            edge-triggered interrupts on inpin
 //            https://github.com/GreyGnome/EnableInterrupt.git
 
-TMP05 *sensorChain[5] = {0};
-uint8_t sensorMax = -1;
 
-TMP05::TMP05(uint8_t count, uint8_t outpin, uint8_t inpin)
+TMP05::TMP05(uint8_t count, uint8_t base, uint8_t board, uint8_t outpin,
+             uint8_t inpin) : p_count(count), p_base(base), p_board(board),
+                              p_outpin(outpin), p_inpin(inpin), p_state(-1)
+
 {
-    p_count = count;
-    p_outpin = outpin;
-    p_inpin = inpin;
-    p_state = -1;
-
-    uint8_t blockSize = count * sizeof(uint8_8t);
-    p_lastResults = new uint8_8t[count];
-    memset(p_lastResults, 0xFF, blockSize);
+    p_modulo = count + 1;
+    p_lastResults = new sensor_data_t[p_modulo];
+    p_readIndex = 0;
+    p_writeIndex = 0;
 
     digitalWrite(p_outpin, HIGH);
     pinMode(p_outpin, OUTPUT);
     pinMode(p_inpin, INPUT_PULLUP);
-    if (sensorMax < 4) {
-        sensorMax++;
-        sensorChain[sensorMax] = this;
-    }
 }
 
-uint8_t TMP05::getOutpin(void)
+uint8_t TMP05::getReadingCount(void)
 {
-    return p_outpin;
+    return (p_writeIndex + p_modulo - p_readIndex) % p_modulo;
 }
 
 void TMP05::enableMyInterrupt(void)
@@ -45,34 +38,47 @@ void TMP05::disableMyInterrupt(void)
 
 void TMP05::handleInterrupt(void)
 {
-    uint32_t now;
-    uint16_t delta;
+    uint32_t now = micros();
+    uint16_t delta = now - p_startMicros;
     uint32_t temp;
+    sensor_data_t *sensor;
 
-    now = micros();
-    delta = now - p_startMicros;
+    // avoid divide by zero
+    if (delta == 0) {
+        delta = 1;
+    }
+
+    //uint8_t value = (arduinoPinState == 0 ? LOW : HIGH);
     p_startMicros = now;
 
     switch (p_state) {
-    case 0:
+    case 0:  // falling edge, measure the high pulse
         p_highMicros = delta;
         p_state = 1;
         break;
-    case 1:
-        if (delta == 0) {
-            delta = 1;
-        }
+    case 1:  // rising edge, measure the low pulse
         p_lowMicros = delta;
         p_state = 0;
 
+        if (getReadingCount() >= p_count - 1) {
+            // No space to store it, carry on
+            break;
+        }
+
         temp = (421LL * 256LL) - (751LL * 256LL * p_highMicros / p_lowMicros);
-        p_lastResults[p_index++] = (uint8_8t)temp;
-        if (p_index >= p_count) {
+        sensor = &p_lastResult[p_writeIndex];
+        p_writeIndex = (p_writeIndex + 1) % p_modulo;
+        sensor->timestamp = millis();
+        sensor->boardNum = p_board;
+        sensor->sensorNum = p_current_input++;
+        sensor->reading = (uint8_8t)temp;
+
+        if (p_current_input >= p_count) {
             p_state = 2;
-            p_index = 0;
+            p_current_input = 0;
         }
         break;
-    case 2:
+    case 2:  // falling edge of the start trigger, we are done.
     default:
         p_state = -1;
         disableMyInterrupt();
@@ -80,11 +86,6 @@ void TMP05::handleInterrupt(void)
         delayMicroseconds(30);
         break;
     }
-}
-
-int8_t TMP05::getState(void)
-{
-    return p_state;
 }
 
 void TMP05::startConversion(void)
@@ -99,17 +100,25 @@ void TMP05::startConversion(void)
 
     enableMyInterrupt();
     p_state = 0;
-    p_index = 0;
+    p_current_input = 0;
     p_startMicros = micros();
     digitalWrite(p_outpin, LOW);
 }
 
-uint8_8t TMP05::getReading(uint8_t index)
+sensor_data_t *TMP05::getReading(void)
 {
-    if (index >= p_count || !p_lastResults) {
-        return (0xFFFF);
+    if (getReadingCount() == 0) {
+        return NULL;
     }
-    return (p_lastResults[index]);
+
+    uint8_t index = p_readIndex;
+    p_readIndex = (p_readIndex + 1) % p_modulo;
+    return &p_lastResults[index];
+}
+
+bool TMP05::inactive(void)
+{
+    return (p_state == -1);
 }
 
 // vim:ts=4:sw=4:ai:et:si:sts=4
