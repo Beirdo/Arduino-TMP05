@@ -1,14 +1,9 @@
 #include "TMP05.h"
-
-#define LIBCALL_ENABLEINTERRUPT
-#define EI_ARDUINO_INTERRUPTED_PIN
-#include <EnableInterrupt.h>
+#include "vectoredInterrupt.h"
 
 // Requires:  use of the system timer (in microseconds)
 //            edge-triggered interrupts on inpin
 //            https://github.com/GreyGnome/EnableInterrupt.git
-
-static void interruptHandler(void);
 
 TMP05 *sensorChain[5] = {0};
 uint8_t sensorMax = -1;
@@ -40,29 +35,12 @@ uint8_t TMP05::getOutpin(void)
 
 void TMP05::enableMyInterrupt(void)
 {
-    // Set the pin to an input with pullup
-    pinMode(p_inpin, INPUT_PULLUP); // /!\ pinMode form THE ARDUINO CORE
-
-    // Attach interrupt handler
-    attachPinChangeInterrupt(p_inpin, interruptHandler, CHANGE);
+    attachVectoredInterrupt(p_inpin, handleInterrupt, CHANGE);
 }
 
 void TMP05::disableMyInterrupt(void)
 {
-    detachPinChangeInterrupt(p_inpin);
-}
-
-static void interruptHandler(void)
-{
-    uint8_t i;
-
-    for (i = 0; i < sensorMax; i++) {
-        TMP05 *sensor = sensorChain[i];
-        if (sensor && sensor->getOutpin() == arduinoInterruptedPin) {
-            sensor->handleInterrupt();
-            return;
-        }
-    }
+    detachVectoredInterrupt(p_inpin);
 }
 
 void TMP05::handleInterrupt(void)
