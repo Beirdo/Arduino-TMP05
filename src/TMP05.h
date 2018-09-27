@@ -23,9 +23,9 @@ public:
     uint8_t getReadingCount(void);
     sensor_data_t *getReading(void);
     bool inactive(void);
+    void handleInterrupt(void);
 
 protected:
-    void handleInterrupt(void);
     void enableMyInterrupt(void);
     void disableMyInterrupt(void);
 private:

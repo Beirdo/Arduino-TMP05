@@ -5,12 +5,38 @@
 //            edge-triggered interrupts on inpin
 //            https://github.com/GreyGnome/EnableInterrupt.git
 
+#define MAX_INSTANCES 5
+
+typedef struct {
+    uint8_t pin;
+    TMP05 *instance;
+} pin_map_t;
+
+pin_map_t pinMap[MAX_INSTANCES] = {0};
+
+static void handlePinInterrupt(uint8_t pin)
+{
+    uint8_t i;
+    TMP05 *instance;
+
+    for (i = 0; i < MAX_INSTANCES; i++) {
+        if (pinMap[i].pin == pin) {
+            instance = pinMap[i].instance;
+            if (instance) {
+                instance->handleInterrupt();
+            }
+            return;
+        }
+    }
+}
 
 TMP05::TMP05(uint8_t count, uint8_t base, uint8_t board, uint8_t outpin,
              uint8_t inpin) : p_count(count), p_base(base), p_board(board),
                               p_outpin(outpin), p_inpin(inpin), p_state(-1)
 
 {
+    uint8_t i;
+
     p_modulo = count + 1;
     p_lastResults = new sensor_data_t[p_modulo];
     p_readIndex = 0;
@@ -19,6 +45,14 @@ TMP05::TMP05(uint8_t count, uint8_t base, uint8_t board, uint8_t outpin,
     digitalWrite(p_outpin, HIGH);
     pinMode(p_outpin, OUTPUT);
     pinMode(p_inpin, INPUT_PULLUP);
+
+    for (i = 0; i < MAX_INSTANCES; i++) {
+        if (!pinMap[i].instance) {
+            pinMap[i].pin = inpin;
+            pinMap[i].instance = this;
+            break;
+        }
+    }
 }
 
 uint8_t TMP05::getReadingCount(void)
@@ -28,7 +62,7 @@ uint8_t TMP05::getReadingCount(void)
 
 void TMP05::enableMyInterrupt(void)
 {
-    attachVectoredInterrupt(p_inpin, handleInterrupt, CHANGE);
+    attachVectoredInterrupt(p_inpin, handlePinInterrupt, CHANGE);
 }
 
 void TMP05::disableMyInterrupt(void)
@@ -66,7 +100,7 @@ void TMP05::handleInterrupt(void)
         }
 
         temp = (421LL * 256LL) - (751LL * 256LL * p_highMicros / p_lowMicros);
-        sensor = &p_lastResult[p_writeIndex];
+        sensor = &p_lastResults[p_writeIndex];
         p_writeIndex = (p_writeIndex + 1) % p_modulo;
         sensor->timestamp = millis();
         sensor->boardNum = p_board;
